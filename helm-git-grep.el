@@ -183,7 +183,7 @@ newline return an empty string."
   (helm-aif (helm-attr 'default-directory)
       (let ((default-directory it))
         (apply 'start-process "git-grep-process" nil "git"
-               (helm-git-grep-args (helm-attr 'exclude-file-pattern))))
+               (helm-git-grep-args (helm-attr 'unexcluded-files))))
     '()))
 
 (defun helm-git-submodule-grep-process ()
@@ -366,20 +366,20 @@ Signal an error if the program returns with a non-zero exit status."
           (forward-line 1))
         lines))))
 
-(defun helm-git-grep-read-exclude-file-pattern ()
+(defun helm-git-grep-remember-unexcluded-files ()
   (when helm-git-grep-exclude-file-p
     (let ((pattern (read-string "Exclude files matching the pattern (regular expression): "
                                 nil
                                 'helm-git-grep-exclude-file-history)))
       (unless (string= pattern "")
-        (helm-attrset 'exclude-file-pattern
+        (helm-attrset 'unexcluded-files
                       (helm-git-grep-exclude-files pattern))))))
 
 (defun helm-git-grep-init ()
   "Init `default-directory' attribute for `helm-git-grep' sources."
   (let ((default-directory (helm-git-grep-get-top-dir)))
     (helm-attrset 'default-directory default-directory)
-    (helm-git-grep-read-exclude-file-pattern)))
+    (helm-git-grep-remember-unexcluded-files)))
 
 (defun helm-git-grep-persistent-action (candidate)
   "Persistent action for `helm-git-grep'.
