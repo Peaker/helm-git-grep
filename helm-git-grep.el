@@ -138,6 +138,10 @@ newline return an empty string."
        (line-beginning-position)
        (line-end-position)))))
 
+(defun helm-git-grep-cwd ()
+  "Get the CWD as an expanded directory name"
+  (file-name-as-directory (expand-file-name (file-truename default-directory))))
+
 (defun helm-git-grep-get-top-dir ()
   "Get the git root directory."
   (let ((cwd (expand-file-name (file-truename default-directory))))
@@ -157,7 +161,7 @@ newline return an empty string."
   "Create arguments of `helm-git-grep-process' in `helm-git-grep'."
   (delq nil
         (append
-         (list "--no-pager" "grep" "--full-name" "-n" "--no-color"
+         (list "--no-pager" "grep" "-n" "--no-color"
                (if helm-git-grep-ignore-case "-i" nil)
                (helm-git-grep-showing-leading-and-trailing-lines-option))
          (nbutlast
@@ -377,7 +381,7 @@ Signal an error if the program returns with a non-zero exit status."
 
 (defun helm-git-grep-init ()
   "Init `default-directory' attribute for `helm-git-grep' sources."
-  (let ((default-directory (helm-git-grep-get-top-dir)))
+  (let ((default-directory (helm-git-grep-cwd)))
     (helm-attrset 'default-directory default-directory)
     (helm-git-grep-remember-unexcluded-files)))
 
