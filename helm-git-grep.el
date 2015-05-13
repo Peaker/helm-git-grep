@@ -142,6 +142,10 @@ newline return an empty string."
   "Get the CWD as an expanded directory name"
   (file-name-as-directory (expand-file-name (file-truename default-directory))))
 
+(defun helm-git-grep-relative-cwd ()
+  "Get the CWD as an expanded directory name"
+  (file-relative-name (helm-git-grep-cwd) (helm-git-grep-git-string "rev-parse" "--show-toplevel")))
+
 (defun helm-git-grep-get-top-dir ()
   "Get the git root directory."
   (let ((cwd (expand-file-name (file-truename default-directory))))
@@ -183,6 +187,14 @@ newline return an empty string."
                            "--and "))))
 
 (defun helm-git-grep-process ()
+  "Retrieve candidates from result of git grep."
+  (helm-aif (helm-attr 'default-directory)
+      (let ((default-directory it))
+        (apply 'start-process "git-grep-process" nil "git"
+               (helm-git-grep-args (helm-attr 'unexcluded-files))))
+    '()))
+
+(defun helm-git-root-grep-process ()
   "Retrieve candidates from result of git grep."
   (helm-aif (helm-attr 'default-directory)
       (let ((default-directory it))
@@ -348,7 +360,7 @@ Argument SOURCE is not used."
                             (buffer-local-value
                              'default-directory (helm-candidate-buffer))))))))))
 
-(defun helm-git-grep-exclude-files (exclude-file-pattern)
+(defun helm-git-grep-unexcluded-files (exclude-file-pattern)
   "Execute `git ls-files | grep -v EXCLUDE-FILE-PATTERN'.
 
 returning its output as a list of lines.
@@ -359,7 +371,7 @@ Signal an error if the program returns with a non-zero exit status."
                    (format "git ls-files | grep -v -E '%s'" exclude-file-pattern)
                     nil (current-buffer) nil)))
       (unless (eq status 0)
-        (error "helm-git-grep-exclude-files exited with status %s" status))
+        (error "helm-git-grep-unexcluded-files exited with status %s" status))
       (goto-char (point-min))
       (let (lines)
         (while (not (eobp))
@@ -377,13 +389,23 @@ Signal an error if the program returns with a non-zero exit status."
                                 'helm-git-grep-exclude-file-history)))
       (unless (string= pattern "")
         (helm-attrset 'unexcluded-files
-                      (helm-git-grep-exclude-files pattern))))))
+                      (helm-git-grep-unexcluded-files pattern))))))
 
 (defun helm-git-grep-init ()
   "Init `default-directory' attribute for `helm-git-grep' sources."
   (let ((default-directory (helm-git-grep-cwd)))
     (helm-attrset 'default-directory default-directory)
     (helm-git-grep-remember-unexcluded-files)))
+
+(defun helm-git-root-grep-init ()
+  "Init `default-directory' attribute for `helm-git-root-grep' sources."
+  (let* ((relative-dir (helm-git-grep-relative-cwd))
+         (exclude-regexp (concat "^" relative-dir))
+         (default-directory (helm-git-grep-get-top-dir)))
+    (helm-attrset 'default-directory default-directory)
+    (helm-attrset 'unexcluded-files
+                  (if (equal "^./" exclude-regexp) '("foobar")
+                    (helm-git-grep-unexcluded-files exclude-regexp)))))
 
 (defun helm-git-grep-persistent-action (candidate)
   "Persistent action for `helm-git-grep'.
@@ -507,9 +529,9 @@ You can save your results in a helm-git-grep-mode buffer, see below.
 
 (define-helm-type-attribute 'git-grep
   `((default-directory . nil)
+    (unexcluded-files . nil)
     (requires-pattern . 3)
     (volatile)
-    (delayed)
     (filtered-candidate-transformer
      helm-git-grep-filtered-candidate-transformer-file-line)
     (action . ,helm-git-grep-actions)
@@ -520,10 +542,30 @@ You can save your results in a helm-git-grep-mode buffer, see below.
     (mode-line . helm-git-grep-mode-line-string)
     (init . helm-git-grep-init)))
 
+(define-helm-type-attribute 'git-root-grep
+  `((default-directory . nil)
+    (requires-pattern . 3)
+    (volatile)
+    (delayed . 0.1)
+    (filtered-candidate-transformer
+     helm-git-grep-filtered-candidate-transformer-file-line)
+    (action . ,helm-git-grep-actions)
+    (history . ,'helm-git-grep-history)
+    (persistent-action . helm-git-grep-persistent-action)
+    (persistent-help . "Jump to line (`C-u' Record in mark ring)")
+    (keymap . ,helm-git-grep-map)
+    (mode-line . helm-git-grep-mode-line-string)
+    (init . helm-git-root-grep-init)))
+
 (defvar helm-source-git-grep
   '((name . "Git Grep")
     (candidates-process . helm-git-grep-process)
     (type . git-grep)))
+
+(defvar helm-source-git-root-grep
+  '((name . "Git Root Grep")
+    (candidates-process . helm-git-root-grep-process)
+    (type . git-root-grep)))
 
 (defvar helm-source-git-submodule-grep
   '((name . "Git Submodule Grep")
@@ -534,6 +576,7 @@ You can save your results in a helm-git-grep-mode buffer, see below.
   "Execute helm git grep.
 Optional argument INPUT is initial input."
   (helm :sources '(helm-source-git-grep
+                   helm-source-git-root-grep
                    helm-source-git-submodule-grep)
         :buffer (if helm-git-grep-ignore-case "*helm git grep [i]*" "*helm git grep*")
         :input input
