@@ -81,6 +81,11 @@ Set it to nil if you don't want this limit."
   :group 'helm-git-grep
   :type  'boolean)
 
+(defcustom helm-git-grep-ignore-submodules nil
+  "Ignore submodules when grepping"
+  :group 'helm-git-grep
+  :type  'boolean)
+
 (defcustom helm-git-grep-showing-leading-and-trailing-lines nil
   "Show leading and trailing lines."
   :group 'helm-git-grep
@@ -575,9 +580,12 @@ You can save your results in a helm-git-grep-mode buffer, see below.
 (defun helm-git-grep-1 (&optional input)
   "Execute helm git grep.
 Optional argument INPUT is initial input."
-  (helm :sources '(helm-source-git-grep
-                   helm-source-git-root-grep
-                   helm-source-git-submodule-grep)
+  (helm :sources (if helm-git-grep-ignore-submodules
+                     '(helm-source-git-grep
+                       helm-source-git-root-grep)
+                   '(helm-source-git-grep
+                       helm-source-git-root-grep
+                       helm-source-git-submodule-grep))
         :buffer (if helm-git-grep-ignore-case "*helm git grep [i]*" "*helm git grep*")
         :input input
         :keymap helm-git-grep-map
